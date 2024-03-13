@@ -50,7 +50,10 @@ func (h *Handler) StandPlayerHandler(w http.ResponseWriter, r *http.Request) {
 	if table.Players[table.Turn].Name != name {
 		http.Error(w, fmt.Sprintf("Player is not registered for table %s", table.ID), http.StatusBadRequest)
 	}
-	// Checks have been made. The turn can now move on. Slight edge case.
+	// Checks have been made. The turn can now move on. Slight edge case to consider if you are the last player.
+	if  table.Turn == len(Pla)
+
+
 
 	json.NewEncoder(w).Encode(response)
 }

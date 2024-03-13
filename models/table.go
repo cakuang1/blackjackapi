@@ -9,24 +9,22 @@ import (
 )
 
 type Table struct {
-	ID              string    `json:"id"`
-	Turn            int       `json:"turn"`
-	Status          bool      `json:"status"`
-	Players         []*Player `json:"players"`
-	NumberOfPlayers int       `json:"number_of_players"`
-	Dealer          *Player   `json:"dealer"`
+	ID      string    `json:"id"`
+	Turn    int       `json:"turn"`
+	Status  bool      `json:"status"`
+	Players []*Player `json:"players"`
+	Dealer  *Player   `json:"dealer"`
 }
 
 // TABLE OPERATIONS
 
 func NewTable(id string) *Table {
 	return &Table{
-		ID:              id,
-		Players:         []*Player{},
-		Dealer:          NewPlayer("Dealer"),
-		Status:          false,
-		Turn:            0,
-		NumberOfPlayers: 0,
+		ID:      id,
+		Players: []*Player{},
+		Dealer:  NewPlayer("Dealer"),
+		Status:  false,
+		Turn:    0,
 	}
 }
 
