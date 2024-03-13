@@ -4,20 +4,29 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+
 	"github.com/redis/go-redis/v9"
 )
 
 type Table struct {
-	ID      string
-	Players []*Player
+	ID              string    `json:"id"`
+	Turn            int       `json:"turn"`
+	Status          bool      `json:"status"`
+	Players         []*Player `json:"players"`
+	NumberOfPlayers int       `json:"number_of_players"`
+	Dealer          *Player   `json:"dealer"`
 }
 
 // TABLE OPERATIONS
 
 func NewTable(id string) *Table {
 	return &Table{
-		ID:      id,
-		Players: []*Player{},
+		ID:              id,
+		Players:         []*Player{},
+		Dealer:          NewPlayer("Dealer"),
+		Status:          false,
+		Turn:            0,
+		NumberOfPlayers: 0,
 	}
 }
 
@@ -30,6 +39,16 @@ func (t *Table) AddPlayer(player *Player) error {
 	return nil
 }
 
+func (t *Table) PlayerIsin(name string) bool {
+	listofplayer := t.Players
+	for _, v := range listofplayer {
+		if v.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
 // GRAB AND SAVE TABLES
 
 func GetTable(ctx context.Context, id string, client *redis.Client) (*Table, error) {
@@ -37,26 +56,26 @@ func GetTable(ctx context.Context, id string, client *redis.Client) (*Table, err
 	if err != nil {
 		return nil, err
 	}
-	// Deserialize the JSON-encoded value into a slice of *Player structs
-	var players []*Player
-	if err := json.Unmarshal([]byte(val), &players); err != nil {
+
+	// Deserialize the JSON-encoded value into a Table struct
+	var table Table
+	if err := json.Unmarshal([]byte(val), &table); err != nil {
 		return nil, err
 	}
-	// Create a new Table instance with the retrieved data
-	return &Table{
-		ID:      id,
-		Players: players,
-	}, nil
+
+	return &table, nil
 }
 
 func SaveTable(ctx context.Context, table *Table, client *redis.Client) error {
-	data, err := json.Marshal(table.Players)
+	data, err := json.Marshal(table)
 	if err != nil {
 		return err
 	}
+
 	// Save the JSON-encoded data to Redis
 	if err := client.Set(ctx, table.ID, data, 0).Err(); err != nil {
 		return err
 	}
+
 	return nil
 }

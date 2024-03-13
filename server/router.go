@@ -5,22 +5,23 @@ import (
 	"net/http"
 )
 
+// maybe tableid first makes more sense
+
 // CREATE   /create
-// JOIN  /{tableid}/{join}/{id}
+// DELETE /{tableid}/delete/
 // STATUS /{tableid}
+// JOIN  /{tableid}/{join}/{id}
 // HIT  /{tableid}/{id}/hit
 // STAND /{tableid}/{id}/stand
-// DELETE /delete/{tableid}
+
 // Handler holds the HTTP handlers for the API
 
 // NewRouter initializes and returns the HTTP router
 func NewRouter(handler *Handler) http.Handler {
 	router := mux.NewRouter()
-	// Create a new table
 	router.HandleFunc("/create", handler.CreateTableHandler).Methods("GET")
-
-	// Get table details
-	router.HandleFunc("/delete/{tableID}", handler.DeleteTableHandler).Methods("GET")
+	router.HandleFunc("/{tableID}/delete/", handler.DeleteTableHandler).Methods("GET")
+	router.HandleFunc("/{tableID}/status", handler.GetTableDetailsHandler).Methods("GET")
 
 	return router
 }

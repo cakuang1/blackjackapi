@@ -1,16 +1,13 @@
 package main
 
 import (
-	"blackjackapi/model"
 	"blackjackapi/server"
-	"context"
 	"fmt"
 	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
+	"net/http"
 	"os"
 )
-
-var ctx = context.Background()
 
 func main() {
 	if err := godotenv.Load(); err != nil {
@@ -18,10 +15,11 @@ func main() {
 		return
 	}
 	ConnectString := os.Getenv("REDIS")
-	opt, _ := redis.ParseURL(os.Getenv(ConnectString))
+	opt, _ := redis.ParseURL(ConnectString)
 	client := redis.NewClient(opt)
+	// SET UP HANDLER DEPENDENCIES
+	handler := server.NewHandler(client)
+	Router := server.NewRouter(handler)
+	http.ListenAndServe(":8080", Router)
 
-	client.Set(ctx, "foo", "bar", 0)
-	val := client.Get(ctx, "foo").Val()
-	print(val)
 }
