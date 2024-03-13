@@ -4,8 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-
+	"fmt"
 	"github.com/redis/go-redis/v9"
+	"strings"
 )
 
 type Table struct {
@@ -17,6 +18,7 @@ type Table struct {
 }
 
 // TABLE OPERATIONS
+const cardWidth = 6
 
 func NewTable(id string) *Table {
 	return &Table{
@@ -45,6 +47,40 @@ func (t *Table) PlayerIsin(name string) bool {
 		}
 	}
 	return false
+}
+func (t *Table) GetBoardText() string {
+	var builder strings.Builder
+
+	// Write table ID and status
+	builder.WriteString(fmt.Sprintf("Table ID: %s\n", t.ID))
+	builder.WriteString(fmt.Sprintf("Status: %s\n", getStatusText(t.Status)))
+
+	// Write dealer's hand
+	builder.WriteString("Dealer's Hand:\n")
+	builder.WriteString(formatHandText(t.Dealer.Hand))
+
+	// Write players' hands
+	builder.WriteString("Players' Hands:\n")
+	for _, player := range t.Players {
+		builder.WriteString(fmt.Sprintf("%s's Hand:\n", player.Name))
+		builder.WriteString(formatHandText(player.Hand))
+	}
+
+	return builder.String()
+}
+
+// Helper function to format a hand into text
+func formatHandText(hand []string) string {
+	var builder strings.Builder
+
+	for _, card := range hand {
+		builder.WriteString(fmt.Sprintf("+%s+\n", strings.Repeat("-", cardWidth)))
+		builder.WriteString(fmt.Sprintf("| %-2s  |\n", card))
+		builder.WriteString(fmt.Sprintf("|     |\n"))
+		builder.WriteString(fmt.Sprintf("|  %-2s |\n", card))
+		builder.WriteString(fmt.Sprintf("+%s+\n", strings.Repeat("-", cardWidth)))
+	}
+	return builder.String()
 }
 
 // GRAB AND SAVE TABLES
@@ -76,4 +112,11 @@ func SaveTable(ctx context.Context, table *Table, client *redis.Client) error {
 	}
 
 	return nil
+}
+
+func getStatusText(status bool) string {
+	if status {
+		return "In Play"
+	}
+	return "Not Started"
 }

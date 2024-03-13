@@ -37,6 +37,7 @@ func (h *Handler) StandPlayerHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Table not found", http.StatusNotFound)
 		return
 	}
+
 	// Not Allowed Requests.
 	// Name is not registered!
 	if !table.PlayerIsin(name) {

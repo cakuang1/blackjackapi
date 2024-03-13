@@ -4,6 +4,7 @@ import (
 	"blackjackapi/models"
 	"context"
 	"encoding/json"
+	"fmt"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/redis/go-redis/v9"
@@ -78,7 +79,7 @@ func (h *Handler) DeleteTableHandler(w http.ResponseWriter, r *http.Request) {
 // STATUS HANDLER
 
 func (h *Handler) GetTableDetailsHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "text/plain")
 
 	vars := mux.Vars(r)
 	id, ok := vars["tableID"]
@@ -95,17 +96,9 @@ func (h *Handler) GetTableDetailsHandler(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "Table not found", http.StatusNotFound)
 		return
 	}
-
-	// Encode the table object into JSON format
-	responseJSON, err := json.Marshal(table)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	// Send the response JSON to the client
+	// Send the game board string to the client
 	w.WriteHeader(http.StatusOK)
-	w.Write(responseJSON)
+	fmt.Fprint(w, table.GetBoardText())
 }
 
 // ADD PLAYER HANDLER
