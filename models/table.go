@@ -48,6 +48,18 @@ func (t *Table) PlayerIsin(name string) bool {
 	}
 	return false
 }
+
+func (t *Table) TableClear() {
+	for _, v := range t.Players {
+		v.Hand = []string{}
+		v.Value = 0
+	}
+	t.Turn = 0
+	t.Dealer.Hand = []string{}
+	t.Dealer.Value = 0
+
+}
+
 func (t *Table) GetBoardText() string {
 	var builder strings.Builder
 
