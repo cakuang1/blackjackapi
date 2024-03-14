@@ -18,7 +18,6 @@ type Table struct {
 }
 
 // TABLE OPERATIONS
-const cardWidth = 6
 
 func NewTable(id string) *Table {
 	return &Table{
@@ -60,38 +59,42 @@ func (t *Table) TableClear() {
 
 }
 
-func (t *Table) GetBoardText() string {
-	var builder strings.Builder
-
-	// Write table ID and status
-	builder.WriteString(fmt.Sprintf("Table ID: %s\n", t.ID))
-	builder.WriteString(fmt.Sprintf("Status: %s\n", getStatusText(t.Status)))
-
-	// Write dealer's hand
-	builder.WriteString("Dealer's Hand:\n")
-	builder.WriteString(formatHandText(t.Dealer.Hand))
-
-	// Write players' hands
-	builder.WriteString("Players' Hands:\n")
-	for _, player := range t.Players {
-		builder.WriteString(fmt.Sprintf("%s's Hand:\n", player.Name))
-		builder.WriteString(formatHandText(player.Hand))
-	}
-
-	return builder.String()
-}
-
 // Helper function to format a hand into text
-func formatHandText(hand []string) string {
+func (table *Table) GetBoardText() string {
 	var builder strings.Builder
-
-	for _, card := range hand {
-		builder.WriteString(fmt.Sprintf("+%s+\n", strings.Repeat("-", cardWidth)))
-		builder.WriteString(fmt.Sprintf("| %-2s  |\n", card))
-		builder.WriteString(fmt.Sprintf("|     |\n"))
-		builder.WriteString(fmt.Sprintf("|  %-2s |\n", card))
-		builder.WriteString(fmt.Sprintf("+%s+\n", strings.Repeat("-", cardWidth)))
+	maxWidth := 50
+	// Calculate the maximum hand length among players and dealer
+	maxHandLength := len(table.Dealer.Hand)
+	for _, player := range table.Players {
+		if len(player.Hand) > maxHandLength {
+			maxHandLength = len(player.Hand)
+		}
 	}
+	// Calculate the total width based on the longest hand length
+	totalWidth := maxWidth + maxHandLength*5 + 15
+	// Print the board header
+	builder.WriteString(strings.Repeat("-", totalWidth) + "\n")
+	builder.WriteString("|" + centerText("BLACKJACK", totalWidth-2) + "|\n")
+	builder.WriteString(strings.Repeat("-", totalWidth) + "\n")
+
+	// Print dealer's hand
+	var dealerHand string
+	if table.Status {
+		dealerHand = fmt.Sprintf("[ ? ] [ %s ]%s", table.Dealer.Hand[1], strings.Repeat(" ", totalWidth-50))
+	} else {
+		dealerHand = " "
+	}
+
+	builder.WriteString(fmt.Sprintf("| Dealer:   %s|\n", dealerHand))
+	// Print players' hands
+	for _, player := range table.Players {
+		playerHand := fmt.Sprintf("[ %s ] ", strings.Join(player.Hand, "] [ "))
+		builder.WriteString(fmt.Sprintf("| Player %s: %s", player.Name, playerHand))
+		totalStr := fmt.Sprintf("(Total: %d)", CalculateHandTotal(player.Hand))
+		builder.WriteString(fmt.Sprintf("%s%s|\n", totalStr, strings.Repeat(" ", totalWidth-len(totalStr)-len(player.Hand)*5-15)))
+	}
+	// Print bottom of the board
+	builder.WriteString(strings.Repeat("-", totalWidth) + "\n")
 	return builder.String()
 }
 
@@ -117,7 +120,6 @@ func SaveTable(ctx context.Context, table *Table, client *redis.Client) error {
 	if err != nil {
 		return err
 	}
-
 	// Save the JSON-encoded data to Redis
 	if err := client.Set(ctx, table.ID, data, 0).Err(); err != nil {
 		return err
@@ -131,4 +133,54 @@ func getStatusText(status bool) string {
 		return "In Play"
 	}
 	return "Not Started"
+}
+
+func CalculateHandTotal(hand []string) int {
+	total := 0
+	aces := 0
+	for _, card := range hand {
+		switch card {
+		case "J", "Q", "K":
+			total += 10
+		case "A":
+			aces++
+		default:
+			total += CardValue(card)
+		}
+	}
+	for aces > 0 && total+11 <= 21 {
+		total += 11
+		aces--
+	}
+	for aces > 0 {
+		total++
+		aces--
+	}
+	return total
+}
+
+func CardValue(card string) int {
+	switch card {
+	case "2", "3", "4", "5", "6", "7", "8", "9", "10":
+		return int(card[0] - '0')
+	case "J", "Q", "K":
+		return 10
+	case "A":
+		return 11
+	default:
+		return 0
+	}
+}
+
+func repeatString(s string, n int) string {
+	result := ""
+	for i := 0; i < n; i++ {
+		result += s
+	}
+	return result
+}
+
+func centerText(text string, width int) string {
+	padding := (width - len(text)) / 2
+	return strings.Repeat(" ", padding) + text + strings.Repeat(" ", width-len(text)-padding)
 }

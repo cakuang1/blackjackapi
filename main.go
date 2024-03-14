@@ -2,6 +2,7 @@ package main
 
 import (
 	"blackjackapi/server"
+	"blackjackapi/server/handlers"
 	"fmt"
 	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
@@ -18,7 +19,7 @@ func main() {
 	opt, _ := redis.ParseURL(ConnectString)
 	client := redis.NewClient(opt)
 	// SET UP HANDLER DEPENDENCIES
-	handler := server.NewHandler(client)
+	handler := handlers.NewHandler(client)
 	Router := server.NewRouter(handler)
 	http.ListenAndServe(":8080", Router)
 

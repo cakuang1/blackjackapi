@@ -1,4 +1,4 @@
-package server
+package handlers
 
 import (
 	"blackjackapi/models"
@@ -139,7 +139,7 @@ func (h *Handler) AddPlayerHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Check if the game is in Play
-	if !table.Status {
+	if table.Status {
 		http.Error(w, "Game is in play. Please wait till the game is over to add a new player", http.StatusBadRequest)
 		return
 	}
@@ -148,6 +148,7 @@ func (h *Handler) AddPlayerHandler(w http.ResponseWriter, r *http.Request) {
 		if v.Name == name {
 			http.Error(w, "Name has already been taken. Please choose another name.", http.StatusBadRequest)
 		}
+		return
 	}
 	// Create the new player
 	NewPlayer := models.NewPlayer(name)
@@ -199,6 +200,7 @@ func (h *Handler) DeletePlayerHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	w.WriteHeader(200)
-	fmt.Fprintf("")
-	fmt.Fprintf("")
+	text := fmt.Sprintf("Player %s has left the table", name)
+	fmt.Fprintf(w, text)
+	fmt.Fprintf(w, table.GetBoardText())
 }

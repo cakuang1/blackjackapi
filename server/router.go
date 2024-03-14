@@ -1,10 +1,9 @@
 package server
 
 import (
-	"net/http"
-
-	"github.com/aws/aws-sdk-go/service/wafregional/wafregionaliface"
+	"blackjackapi/server/handlers"
 	"github.com/gorilla/mux"
+	"net/http"
 )
 
 // maybe tableid first makes more sense
@@ -20,7 +19,7 @@ import (
 // Handler holds the HTTP handlers for the API
 
 // NewRouter initializes and returns the HTTP router
-func NewRouter(handler *Handler) http.Handler {
+func NewRouter(handler *handlers.Handler) http.Handler {
 	router := mux.NewRouter()
 	//CREATE
 	router.HandleFunc("/create", handler.CreateTableHandler).Methods("GET")
@@ -29,13 +28,13 @@ func NewRouter(handler *Handler) http.Handler {
 	//STATUS
 	router.HandleFunc("/{tableID}/status", handler.GetTableDetailsHandler).Methods("GET")
 	// JOIN
-	router.HandleFunc("/{tableID}/join/{name}", handler.GetTableDetailsHandler).Methods("GET")
+	router.HandleFunc("/{tableID}/join/{name}", handler.AddPlayerHandler).Methods("GET")
 	// LEAVE
-	router.HandleFunc("/{tableID}/leave/{name}", handler.GetTableDetailsHandler).Methods("GET")
+	router.HandleFunc("/{tableID}/leave/{name}", handler.DeletePlayerHandler).Methods("GET")
 	// HIT
-	router.HandleFunc("/{tableID}/hit/{name}", handler.GetTableDetailsHandler).Methods("GET")
+	router.HandleFunc("/{tableID}/hit/{name}", handler.HitPlayerHandler).Methods("GET")
 	// STAND
-	router.HandleFunc("/{tableID}/stand/{name}", handler.GetTableDetailsHandler).Methods("GET")
+	router.HandleFunc("/{tableID}/stand/{name}", handler.StandPlayerHandler).Methods("GET")
 
 	return router
 }

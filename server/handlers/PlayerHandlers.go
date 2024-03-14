@@ -1,4 +1,4 @@
-package server
+package handlers
 
 import (
 	"blackjackapi/models"
@@ -6,11 +6,6 @@ import (
 	"github.com/gorilla/mux"
 	"net/http"
 )
-
-
-
-
-
 
 // HIT
 func (h *Handler) HitPlayerHandler(w http.ResponseWriter, r *http.Request) {
