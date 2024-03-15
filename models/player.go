@@ -49,6 +49,8 @@ func (p *Player) AddRandomCard() {
 	p.Hand = append(p.Hand, rank)
 }
 
+
+
 func (p *Player) SetScore() {
 	score := 0
 	numAces := 0 // Count of Aces in the hand

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/redis/go-redis/v9"
+	"math/rand"
 	"strings"
 )
 
@@ -38,6 +39,29 @@ func (t *Table) AddPlayer(player *Player) error {
 	return nil
 }
 
+func (t *Table) DeletePlayer(name string) error {
+	// Find the index of the player with the given name
+	index := -1
+	for i, player := range t.Players {
+		if player.Name == name {
+			index = i
+			break
+		}
+	}
+
+	// If the player is not found, return an error
+	if index == -1 {
+		return errors.New("Player not found")
+	}
+	// If the player is the last element, remove it without appending
+	fmt.Println(t.Players)
+
+	t.Players = remove(t.Players, index)
+	fmt.Println(t.Players)
+
+	return nil
+}
+
 func (t *Table) PlayerIsin(name string) bool {
 	listofplayer := t.Players
 	for _, v := range listofplayer {
@@ -56,7 +80,18 @@ func (t *Table) TableClear() {
 	t.Turn = 0
 	t.Dealer.Hand = []string{}
 	t.Dealer.Value = 0
+}
 
+func (t *Table) StartTable() {
+	t.Dealer.Hand = append(t.Dealer.Hand, GetRandomCard())
+	t.Dealer.Hand = append(t.Dealer.Hand, GetRandomCard())
+	t.Dealer.Value = CalculateHandTotal(t.Dealer.Hand)
+	for _, v := range t.Players {
+		v.Hand = append(v.Hand, GetRandomCard())
+		v.Hand = append(v.Hand, GetRandomCard())
+		v.Value = CalculateHandTotal(v.Hand)
+	}
+	t.Status = true
 }
 
 // Helper function to format a hand into text
@@ -76,29 +111,53 @@ func (table *Table) GetBoardText() string {
 	builder.WriteString(strings.Repeat("-", totalWidth) + "\n")
 	builder.WriteString("|" + centerText("BLACKJACK", totalWidth-2) + "|\n")
 	builder.WriteString(strings.Repeat("-", totalWidth) + "\n")
+	tableid := fmt.Sprintf("| Table ID:%s ", table.ID)
+	builder.WriteString(tableid + strings.Repeat(" ", totalWidth-len(tableid)-1) + "|\n")
+	status := fmt.Sprintf("| Status:%s ", GetStatus(table.Status))
+	builder.WriteString(status + strings.Repeat(" ", totalWidth-len(status)-1) + "|\n")
+	turn := fmt.Sprintf("| Turn:%d ", table.Turn)
+	builder.WriteString(turn + strings.Repeat(" ", totalWidth-len(turn)-1) + "|\n")
+	playercount := fmt.Sprintf("| Number of Players:%d", len(table.Players))
+	builder.WriteString(playercount + strings.Repeat(" ", totalWidth-len(playercount)-1) + "|\n")
 
+	// need to first convert
+	var listofplayers []string
+	for _, v := range table.Players {
+		listofplayers = append(listofplayers, v.Name)
+	}
+	playerlist := fmt.Sprintf("| Players:%s", listofplayers)
+	builder.WriteString(playerlist + strings.Repeat(" ", totalWidth-len(playerlist)-1) + "|\n")
 	// Print dealer's hand
-	var dealerHand string
 	if table.Status {
-		dealerHand = fmt.Sprintf("[ ? ] [ %s ]%s", table.Dealer.Hand[1], strings.Repeat(" ", totalWidth-50))
-	} else {
-		dealerHand = " "
+		// what are the conditions here
+		deal := ""
+		for i := 1; i <= len(table.Dealer.Hand)-1; i++ {
+			deal += fmt.Sprintf("[ %s ]", table.Dealer.Hand[i])
+		}
+		dealerhand1 := "| Dealer:[ ? ] " + deal
+		builder.WriteString(dealerhand1 + strings.Repeat(" ", totalWidth-len(dealerhand1)))
+		for _, player := range table.Players {
+			playerstring := ""
+			for _, v := range player.Hand {
+				playerstring += fmt.Sprintf("[ %s ]", v)
+			}
+			new := fmt.Sprintf("| %s: %s", player.Name, playerstring)
+			builder.WriteString(new + strings.Repeat(" ", totalWidth-len(new)))
+		}
 	}
 
-	builder.WriteString(fmt.Sprintf("| Dealer:   %s|\n", dealerHand))
-	// Print players' hands
-	for _, player := range table.Players {
-		playerHand := fmt.Sprintf("[ %s ] ", strings.Join(player.Hand, "] [ "))
-		builder.WriteString(fmt.Sprintf("| Player %s: %s", player.Name, playerHand))
-		totalStr := fmt.Sprintf("(Total: %d)", CalculateHandTotal(player.Hand))
-		builder.WriteString(fmt.Sprintf("%s%s|\n", totalStr, strings.Repeat(" ", totalWidth-len(totalStr)-len(player.Hand)*5-15)))
-	}
-	// Print bottom of the board
 	builder.WriteString(strings.Repeat("-", totalWidth) + "\n")
 	return builder.String()
 }
 
 // GRAB AND SAVE TABLES
+
+func GetStatus(status bool) string {
+	if status {
+		return "Game is in progress. Player deletion "
+	}
+	return "Game has not started. You are allowed to join "
+}
 
 func GetTable(ctx context.Context, id string, client *redis.Client) (*Table, error) {
 	val, err := client.Get(ctx, id).Result()
@@ -126,13 +185,6 @@ func SaveTable(ctx context.Context, table *Table, client *redis.Client) error {
 	}
 
 	return nil
-}
-
-func getStatusText(status bool) string {
-	if status {
-		return "In Play"
-	}
-	return "Not Started"
 }
 
 func CalculateHandTotal(hand []string) int {
@@ -172,15 +224,23 @@ func CardValue(card string) int {
 	}
 }
 
-func repeatString(s string, n int) string {
-	result := ""
-	for i := 0; i < n; i++ {
-		result += s
-	}
-	return result
-}
-
 func centerText(text string, width int) string {
 	padding := (width - len(text)) / 2
 	return strings.Repeat(" ", padding) + text + strings.Repeat(" ", width-len(text)-padding)
+}
+
+func RandomRank() string {
+	// Define the possible ranks
+	ranks := []string{"2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A"}
+
+	// Generate a random index for the rank
+	rankIndex := rand.Intn(len(ranks))
+
+	// Return the randomly selected rank
+	return ranks[rankIndex]
+}
+
+func remove(slice []*Player, i int) []*Player {
+	copy(slice[i:], slice[i+1:])
+	return slice[:len(slice)-1]
 }

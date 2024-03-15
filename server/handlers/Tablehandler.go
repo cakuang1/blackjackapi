@@ -3,7 +3,6 @@ package handlers
 import (
 	"blackjackapi/models"
 	"context"
-	"encoding/json"
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
@@ -34,8 +33,8 @@ func (h *Handler) CreateTableHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	text := fmt.Sprintf("Table has been created. Table id : %s", id)
-	fmt.Fprintf(w, text)
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprint(w, fmt.Sprintf("Table %s has been created", id))
 	fmt.Fprint(w, table.GetBoardText())
 }
 
@@ -55,14 +54,8 @@ func (h *Handler) DeleteTableHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
-	// Respond with a success message
-	response := struct {
-		Message string `json:"message"`
-	}{
-		Message: "Table deleted successfully",
-	}
-	json.NewEncoder(w).Encode(response)
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprint(w, fmt.Sprintf("Table %s has been created", id))
 }
 
 // START HANDLER
@@ -76,12 +69,15 @@ func (h *Handler) StartTableHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	table, err := models.GetTable(h.Context, id, h.Client)
-
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	if table.Status {
+		http.Error(w, "", http.StatusBadRequest)
+	}
 	table.TableClear()
+	table.StartTable()
 	models.SaveTable(h.Context, table, h.Client)
 	fmt.Fprint(w, "Game has started")
 	fmt.Fprint(w, table.GetBoardText())
@@ -91,7 +87,6 @@ func (h *Handler) StartTableHandler(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) GetTableDetailsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
-
 	vars := mux.Vars(r)
 	id, ok := vars["tableID"]
 	if !ok {
@@ -143,20 +138,25 @@ func (h *Handler) AddPlayerHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Game is in play. Please wait till the game is over to add a new player", http.StatusBadRequest)
 		return
 	}
+	if len(table.Players) >= 5 {
+		http.Error(w, "The maximum amount of players in table is 5", http.StatusBadRequest)
+		return
+	}
 	// Check if the name is already used
 	for _, v := range table.Players {
 		if v.Name == name {
 			http.Error(w, "Name has already been taken. Please choose another name.", http.StatusBadRequest)
+			return
 		}
-		return
 	}
+
 	// Create the new player
 	NewPlayer := models.NewPlayer(name)
 	// Checks have been made, Players can start being added
 	table.AddPlayer(NewPlayer)
 	models.SaveTable(h.Context, table, h.Client)
 	w.WriteHeader(http.StatusOK)
-	text := fmt.Sprintf("New player %s has been added to table %s", name, table.ID)
+	text := fmt.Sprintf("<b>New player %s has been added to table %s</b>\n", name, table.ID)
 	fmt.Fprintf(w, text)
 	fmt.Fprintf(w, table.GetBoardText())
 }
@@ -184,23 +184,19 @@ func (h *Handler) DeletePlayerHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Check if the game is in Play
-	if !table.Status {
+	if table.Status {
 		http.Error(w, "Game is in play. Please wait till the game is over to delete a player", http.StatusBadRequest)
 		return
 	}
 	if !table.PlayerIsin(name) {
 		http.Error(w, fmt.Sprintf("Player %s is not in table %s", name, table.ID), http.StatusBadRequest)
+		return
 	}
 	// Check if the name is already used
-	for i, v := range table.Players {
-		if v.Name == name {
-			// Delete the element at index i by slicing the slice
-			table.Players = append(table.Players[:i], table.Players[i+1:]...)
-			break // Exit the loop since the element is deleted
-		}
-	}
+	table.DeletePlayer(name)
+	models.SaveTable(h.Context,table,h.Client)
 	w.WriteHeader(200)
-	text := fmt.Sprintf("Player %s has left the table", name)
+	text := fmt.Sprintf("Player %s has left the table\n", name)
 	fmt.Fprintf(w, text)
 	fmt.Fprintf(w, table.GetBoardText())
 }

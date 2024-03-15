@@ -93,14 +93,15 @@ func (h *Handler) StandPlayerHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Checks have been made. The turn can now move on. Slight edge case to consider if you are the last player.
-	if table.Turn == len(table.Players) {
+	if table.Turn == len(table.Players)-1 {
 		table.Status = false
 	} else {
 		table.Turn++
 	}
+
 	models.SaveTable(h.Context, table, h.Client)
 	w.WriteHeader(http.StatusOK)
-	turnmessage := fmt.Sprintf("Player %s has decided to stand", name)
+	turnmessage := fmt.Sprintf("%s has decided to stand", name)
 	fmt.Fprint(w, turnmessage)
 	fmt.Fprint(w, table.GetBoardText())
 

@@ -24,9 +24,11 @@ func NewRouter(handler *handlers.Handler) http.Handler {
 	//CREATE
 	router.HandleFunc("/create", handler.CreateTableHandler).Methods("GET")
 	//DELETE
-	router.HandleFunc("/{tableID}/delete/", handler.DeleteTableHandler).Methods("GET")
+	router.HandleFunc("/{tableID}/delete", handler.DeleteTableHandler).Methods("GET")
 	//STATUS
 	router.HandleFunc("/{tableID}/status", handler.GetTableDetailsHandler).Methods("GET")
+	//START
+	router.HandleFunc("/{tableID}/start", handler.StartTableHandler)
 	// JOIN
 	router.HandleFunc("/{tableID}/join/{name}", handler.AddPlayerHandler).Methods("GET")
 	// LEAVE
