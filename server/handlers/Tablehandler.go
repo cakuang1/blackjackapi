@@ -34,8 +34,10 @@ func (h *Handler) CreateTableHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprint(w, fmt.Sprintf("Table %s has been created", id))
-	fmt.Fprint(w, table.GetBoardText())
+	final := fmt.Sprintf("Table %s has been created\n", id) + table.GetBoardText()
+	fmt.Fprint(w, final)
+	models.produceMessage()
+
 }
 
 // DELETE TABLE
@@ -79,8 +81,9 @@ func (h *Handler) StartTableHandler(w http.ResponseWriter, r *http.Request) {
 	table.TableClear()
 	table.StartTable()
 	models.SaveTable(h.Context, table, h.Client)
-	fmt.Fprint(w, "Game has started")
-	fmt.Fprint(w, table.GetBoardText())
+	final := "Game has started\n" + table.GetBoardText()
+	fmt.Fprint(w, final)
+
 }
 
 // STATUS HANDLER
@@ -156,9 +159,9 @@ func (h *Handler) AddPlayerHandler(w http.ResponseWriter, r *http.Request) {
 	table.AddPlayer(NewPlayer)
 	models.SaveTable(h.Context, table, h.Client)
 	w.WriteHeader(http.StatusOK)
-	text := fmt.Sprintf("<b>New player %s has been added to table %s</b>\n", name, table.ID)
+	text := fmt.Sprintf("<b>New player %s has been added to table %s</b>\n", name, table.ID) + table.GetBoardText()
 	fmt.Fprintf(w, text)
-	fmt.Fprintf(w, table.GetBoardText())
+
 }
 
 // DELETE PLAYER HANDLER
@@ -194,9 +197,8 @@ func (h *Handler) DeletePlayerHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	// Check if the name is already used
 	table.DeletePlayer(name)
-	models.SaveTable(h.Context,table,h.Client)
+	models.SaveTable(h.Context, table, h.Client)
 	w.WriteHeader(200)
-	text := fmt.Sprintf("Player %s has left the table\n", name)
+	text := fmt.Sprintf("Player %s has left the table\n", name) + table.GetBoardText()
 	fmt.Fprintf(w, text)
-	fmt.Fprintf(w, table.GetBoardText())
 }

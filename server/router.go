@@ -15,6 +15,7 @@ import (
 // LEAVE /{tableid}/leave/{id}
 // HIT  /{tableid}/{id}/hit
 // STAND /{tableid}/{id}/stand
+// HOOK /{tableid}/hook
 
 // Handler holds the HTTP handlers for the API
 
@@ -37,6 +38,7 @@ func NewRouter(handler *handlers.Handler) http.Handler {
 	router.HandleFunc("/{tableID}/hit/{name}", handler.HitPlayerHandler).Methods("GET")
 	// STAND
 	router.HandleFunc("/{tableID}/stand/{name}", handler.StandPlayerHandler).Methods("GET")
-
+	// HOOK
+	router.HandleFunc("/{tableID}/hook", handler.KafkaHandler).Methods("GET")
 	return router
 }

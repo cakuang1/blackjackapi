@@ -51,9 +51,10 @@ func (h *Handler) HitPlayerHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	models.SaveTable(h.Context, table, h.Client)
 	w.WriteHeader(http.StatusOK)
-	turnmessage := fmt.Sprintf("Player %s has decided to stand", name)
-	fmt.Fprint(w, turnmessage)
-	fmt.Fprint(w, table.GetBoardText())
+	turnmessage := fmt.Sprintf("Player %s has decided to stand\n", name)
+	final := turnmessage + table.GetBoardText()
+	fmt.Fprint(w, final)
+	models
 }
 
 // STAND
@@ -102,7 +103,7 @@ func (h *Handler) StandPlayerHandler(w http.ResponseWriter, r *http.Request) {
 	models.SaveTable(h.Context, table, h.Client)
 	w.WriteHeader(http.StatusOK)
 	turnmessage := fmt.Sprintf("%s has decided to stand", name)
-	fmt.Fprint(w, turnmessage)
-	fmt.Fprint(w, table.GetBoardText())
+	final := turnmessage + table.GetBoardText()
+	fmt.Fprint(w, final)
 
 }

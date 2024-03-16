@@ -119,13 +119,12 @@ func (table *Table) GetBoardText() string {
 	builder.WriteString(turn + strings.Repeat(" ", totalWidth-len(turn)-1) + "|\n")
 	playercount := fmt.Sprintf("| Number of Players:%d", len(table.Players))
 	builder.WriteString(playercount + strings.Repeat(" ", totalWidth-len(playercount)-1) + "|\n")
-
 	// need to first convert
 	var listofplayers []string
 	for _, v := range table.Players {
 		listofplayers = append(listofplayers, v.Name)
 	}
-	playerlist := fmt.Sprintf("| Players:%s", listofplayers)
+	playerlist := fmt.Sprintf("| Players in lobby : %s", listofplayers)
 	builder.WriteString(playerlist + strings.Repeat(" ", totalWidth-len(playerlist)-1) + "|\n")
 	// Print dealer's hand
 	if table.Status {
@@ -135,14 +134,14 @@ func (table *Table) GetBoardText() string {
 			deal += fmt.Sprintf("[ %s ]", table.Dealer.Hand[i])
 		}
 		dealerhand1 := "| Dealer:[ ? ] " + deal
-		builder.WriteString(dealerhand1 + strings.Repeat(" ", totalWidth-len(dealerhand1)))
+		builder.WriteString(dealerhand1 + strings.Repeat(" ", totalWidth-len(dealerhand1)-1) + "|\n")
 		for _, player := range table.Players {
 			playerstring := ""
 			for _, v := range player.Hand {
 				playerstring += fmt.Sprintf("[ %s ]", v)
 			}
 			new := fmt.Sprintf("| %s: %s", player.Name, playerstring)
-			builder.WriteString(new + strings.Repeat(" ", totalWidth-len(new)))
+			builder.WriteString(new + strings.Repeat(" ", totalWidth-len(new)-1) + "|\n")
 		}
 	}
 
