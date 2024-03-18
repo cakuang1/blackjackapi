@@ -2,203 +2,275 @@ package handlers
 
 import (
 	"blackjackapi/models"
-	"context"
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
-	"github.com/redis/go-redis/v9"
 	"net/http"
+	"strconv"
 )
 
-type Handler struct {
-	Client  *redis.Client
-	Context context.Context
-}
-
-// NewHandler initializes and returns a new Handler instance
-func NewHandler(tableStore *redis.Client) *Handler {
-	return &Handler{
-		Client:  tableStore,
-		Context: context.Background(),
-	}
-}
-
-// CREATE TABLE
+// Creates a connect 4 table and sends the client the board id.
+// CreateTableHandler creates a Connect 4 table and sends the client the board ID.
 func (h *Handler) CreateTableHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/plain")
-	id := uuid.New().String()
-	table := models.NewTable(id)
-	err := models.SaveTable(h.Context, table, h.Client)
+	// Create a new Connect 4 table
+	// Generate a unique ID for the table (you can use UUID or any other method)
+	// For simplicity, let's assume the table ID is an integer incremented for each new table
+	tableID := uuid.New().String()
+	table := models.NewSession(tableID)
+	// Set the table ID
+	table.ID = tableID
+	// Save the table to Redis
+	err := models.SaveSession(h.Context, table, h.Client)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Trouble saving table. Please try again.", http.StatusInternalServerError)
 		return
 	}
-	w.WriteHeader(http.StatusOK)
-	final := fmt.Sprintf("Table %s has been created\n", id) + table.GetBoardText()
-	fmt.Fprint(w, final)
-	models.produceMessage()
-
+	// Respond to the client with the table ID
+	response := fmt.Sprintf("Connect 4 table created with ID: %s. Connect to the table by calling /%s/connect", tableID, tableID)
+	w.WriteHeader(http.StatusCreated)
+	w.Write([]byte(response))
 }
 
-// DELETE TABLE
+// DeleteTableHandler
+// DeleteTableHandler deletes a Connect 4 table.
 func (h *Handler) DeleteTableHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/plain")
-	// Get the tableID from the URL path parameters
 	vars := mux.Vars(r)
-	id, ok := vars["tableID"]
-	if !ok {
-		http.Error(w, "ID parameter is required", http.StatusBadRequest)
-		return
-	}
-	// If the table does not exist, return a 404 Not Found error
-	err := h.Client.Del(h.Context, id).Err()
+	tableID := vars["table_id"]
+
+	// Delete the table from Redis
+	err := models.DeleteSession(h.Context, tableID, h.Client)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Failed to delete table from Redis", http.StatusInternalServerError)
 		return
 	}
+	// Respond to the client
+	response := fmt.Sprintf("Connect 4 table with ID %s deleted successfully. Thank you for deleting the table.", tableID)
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprint(w, fmt.Sprintf("Table %s has been created", id))
+	w.Write([]byte(response))
 }
 
-// START HANDLER
-func (h *Handler) StartTableHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/plain")
-	// Get the tableID from the URL path parameters
+// JoinTableHandler handles requests to join a Connect 4 table
+func (h *Handler) JoinTableHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	id, ok := vars["tableID"]
-	if !ok {
-		http.Error(w, "ID parameter is required", http.StatusBadRequest)
-		return
-	}
-	table, err := models.GetTable(h.Context, id, h.Client)
+	tableID := vars["tableID"]
+	playerName := vars["name"]
+
+	// Retrieve table from Redis
+	table, err := models.GetSession(h.Context, tableID, h.Client)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Failed to retrieve table from Redis", http.StatusInternalServerError)
 		return
 	}
-	if table.Status {
-		http.Error(w, "", http.StatusBadRequest)
+	// Check if the table is already full
+	if len(table.Players) >= 2 {
+		http.Error(w, "Table is already full", http.StatusConflict)
+		return
 	}
-	table.TableClear()
-	table.StartTable()
-	models.SaveTable(h.Context, table, h.Client)
-	final := "Game has started\n" + table.GetBoardText()
-	fmt.Fprint(w, final)
+	PlayerIsin := false
 
-}
-
-// STATUS HANDLER
-
-func (h *Handler) GetTableDetailsHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/plain")
-	vars := mux.Vars(r)
-	id, ok := vars["tableID"]
-	if !ok {
-		http.Error(w, "ID parameter is required", http.StatusBadRequest)
-		return
-	}
-	table, err := models.GetTable(h.Context, id, h.Client)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if table == nil {
-		http.Error(w, "Table not found", http.StatusNotFound)
-		return
-	}
-	// Send the game board string to the client
-	w.WriteHeader(http.StatusOK)
-	fmt.Fprint(w, table.GetBoardText())
-}
-
-// ADD PLAYER HANDLER
-func (h *Handler) AddPlayerHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/plain")
-	// Get the tableID from the URL path parameters
-	vars := mux.Vars(r)
-	id, ok := vars["tableID"]
-	if !ok {
-		http.Error(w, "ID parameter is required", http.StatusBadRequest)
-		return
-	}
-	name, ok := vars["name"]
-	if !ok {
-		http.Error(w, "Name parameter is required", http.StatusBadRequest)
-		return
-	}
-
-	if len(name) < 1 || len(name) > 10 {
-		http.Error(w, "Please keep names within 1 to 10 characters please", http.StatusBadRequest)
-		return
-	}
-	// Get the table details from the models package
-	table, err := models.GetTable(h.Context, id, h.Client)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	// Check if the game is in Play
-	if table.Status {
-		http.Error(w, "Game is in play. Please wait till the game is over to add a new player", http.StatusBadRequest)
-		return
-	}
-	if len(table.Players) >= 5 {
-		http.Error(w, "The maximum amount of players in table is 5", http.StatusBadRequest)
-		return
-	}
-	// Check if the name is already used
 	for _, v := range table.Players {
-		if v.Name == name {
-			http.Error(w, "Name has already been taken. Please choose another name.", http.StatusBadRequest)
-			return
+		if v.Name == playerName {
+			PlayerIsin = true
 		}
 	}
 
-	// Create the new player
-	NewPlayer := models.NewPlayer(name)
-	// Checks have been made, Players can start being added
-	table.AddPlayer(NewPlayer)
-	models.SaveTable(h.Context, table, h.Client)
-	w.WriteHeader(http.StatusOK)
-	text := fmt.Sprintf("<b>New player %s has been added to table %s</b>\n", name, table.ID) + table.GetBoardText()
-	fmt.Fprintf(w, text)
+	if PlayerIsin {
+		http.Error(w, fmt.Sprintf("Name %s has already been taken", playerName), http.StatusConflict)
+		return
+	}
+	// Create a new player
+	player := models.NewPlayer(playerName)
+	// Add the player to the table
+	err = table.AddPlayer(player)
+	if err != nil {
+		http.Error(w, "Failed to add player to the table", http.StatusInternalServerError)
+		return
+	}
+	// Save the updated table to Redis
+	err = models.SaveSession(h.Context, table, h.Client)
+	if err != nil {
+		http.Error(w, "Failed to save table to Redis", http.StatusInternalServerError)
+		return
+	}
 
+	// Produce message to Kafka topic
+	message := fmt.Sprintf("Player %s joined table %s \n", player.Name, table.ID)
+	message = table.StatusBoard(message) + table.StringBoard()
+
+	err = models.ProduceMessage(h.KAFKAADDRESS, table.ID, message, h.KAFKAUSERNAME, h.KAFKAPASSWORD)
+	if err != nil {
+		http.Error(w, "Failed to produce message to Kafka topic", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusCreated)
 }
 
-// DELETE PLAYER HANDLER
-func (h *Handler) DeletePlayerHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/plain")
-	// Get the tableID from the URL path parameters
+// StartGameHandler handles requests to start a Connect 4 game
+func (h *Handler) StartGameHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	id, ok := vars["tableID"]
-	if !ok {
-		http.Error(w, "ID parameter is required", http.StatusBadRequest)
+	tableID := vars["table_id"]
+
+	// Retrieve table from Redis
+	table, err := models.GetSession(h.Context, tableID, h.Client)
+	if err != nil {
+		http.Error(w, "Table does not exist. Please make sure your table id is correct.", http.StatusInternalServerError)
 		return
 	}
-	name, ok := vars["name"]
-	if !ok {
-		http.Error(w, "Name parameter is required", http.StatusBadRequest)
+	// Check if there are exactly two players on the table
+	if len(table.Players) != 2 {
+		http.Error(w, "Need exactly two players to start the game", http.StatusBadRequest)
+		return
+	}
+	// Start the game (for example, set the status to true)
+	table.Status = true
+	// Save the updated table to Redis
+	err = models.SaveSession(h.Context, table, h.Client)
+	if err != nil {
+		http.Error(w, "Failed to save table to Redis", http.StatusInternalServerError)
+		return
+	}
+	// Produce message to Kafka topic
+	message := fmt.Sprintf("Game started for table %s \n", table.ID)
+	message = table.StatusBoard(message) + table.StringBoard()
+	err = models.ProduceMessage(h.KAFKAADDRESS, tableID, message, h.KAFKAUSERNAME, h.KAFKAPASSWORD)
+	if err != nil {
+		http.Error(w, "Failed to produce message to Kafka topic", http.StatusInternalServerError)
 		return
 	}
 
-	// Get the table details from the models package
-	table, err := models.GetTable(h.Context, id, h.Client)
+	w.WriteHeader(http.StatusOK)
+}
+
+// DropPieceHandler handles requests to drop a piece in the Connect 4 game
+func (h *Handler) DropPieceHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	tableID := vars["table_id"]
+	playerName := vars["player_name"]
+	columnStr := vars["column"]
+	column, err := strconv.Atoi(columnStr)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Invalid column number", http.StatusBadRequest)
 		return
 	}
-	// Check if the game is in Play
-	if table.Status {
-		http.Error(w, "Game is in play. Please wait till the game is over to delete a player", http.StatusBadRequest)
+	// Retrieve table from Redis
+	table, err := models.GetSession(h.Context, tableID, h.Client)
+	if err != nil {
+		http.Error(w, "Failed to retrieve table from Redis", http.StatusInternalServerError)
 		return
 	}
-	if !table.PlayerIsin(name) {
-		http.Error(w, fmt.Sprintf("Player %s is not in table %s", name, table.ID), http.StatusBadRequest)
+
+	// Find the player
+	var currentPlayer *models.Player
+	for _, player := range table.Players {
+		if player.Name == playerName {
+			currentPlayer = player
+			break
+		}
+	}
+	if currentPlayer == nil {
+		http.Error(w, "Player not found in the table", http.StatusBadRequest)
 		return
 	}
-	// Check if the name is already used
-	table.DeletePlayer(name)
-	models.SaveTable(h.Context, table, h.Client)
-	w.WriteHeader(200)
-	text := fmt.Sprintf("Player %s has left the table\n", name) + table.GetBoardText()
-	fmt.Fprintf(w, text)
+	// Check if it's the player's turn (example logic, you may need to implement actual turn tracking )
+	if table.Turn%2 == 0 && currentPlayer.Name != table.Players[0].Name {
+		http.Error(w, fmt.Sprintf("Not %s's turn, please wait until your opponent plays their move", currentPlayer.Name), http.StatusBadRequest)
+		return
+	}
+	if table.Turn%2 == 1 && currentPlayer.Name != table.Players[1].Name {
+		http.Error(w, fmt.Sprintf("Not %s's turn, please wait until your opponent plays their move", currentPlayer.Name), http.StatusBadRequest)
+		return
+	}
+
+	// Get symbol for the current player based on their position in the Players array
+	playerIndex := 0
+	for i, player := range table.Players {
+		if player == currentPlayer {
+			playerIndex = i
+			break
+		}
+	}
+	playerSymbol := ""
+	if playerIndex == 0 {
+		playerSymbol = "X"
+	} else if playerIndex == 1 {
+		playerSymbol = "O"
+	} else {
+		http.Error(w, "Unexpected player index", http.StatusInternalServerError)
+		return
+	}
+
+	err = table.DropPiece(column, playerSymbol)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	// check if the current status is full or if someone has won
+
+	// Increment turn count (example logic)
+	table.Turn++
+	// Produce message to Kafka topic
+	message := fmt.Sprintf("Player %s dropped piece in column %d", currentPlayer.Name, column)
+	if table.CheckWin(playerSymbol) {
+		table.Players[playerIndex].AddWin()
+		message += fmt.Sprintf("Player %s has won. Game is now over. ", table.Players[playerIndex].Name)
+		table.Status = false
+	} else if table.IsBoardFull() {
+		message += "Board is full. Game is now Over"
+	}
+	message += "\n"
+	message = table.StatusBoard(message) + table.StringBoard()
+	err = models.ProduceMessage(h.KAFKAADDRESS, tableID, message, h.KAFKAUSERNAME, h.KAFKAPASSWORD)
+	if err != nil {
+		http.Error(w, "Failed to produce message to Kafka topic", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+// LeaveTableHandler handles requests from players who want to leave the Connect 4 table
+func (h *Handler) LeaveTableHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	tableID := vars["tableID"]
+	playerName := vars["name"]
+
+	// Retrieve the table from Redis
+	table, err := models.GetSession(h.Context, tableID, h.Client)
+	if err != nil {
+		http.Error(w, "Failed to retrieve table from Redis", http.StatusInternalServerError)
+		return
+	}
+	// Find the player in the table
+	playerIndex := -1
+	for i, player := range table.Players {
+		if player.Name == playerName {
+			playerIndex = i
+			break
+		}
+	}
+
+	if playerIndex == -1 {
+		http.Error(w, "Player not found in the table", http.StatusBadRequest)
+		return
+	}
+
+	// Remove the player from the table
+	table.Players = append(table.Players[:playerIndex], table.Players[playerIndex+1:]...)
+
+	// Save the updated table to Redis
+	err = models.SaveSession(h.Context, table, h.Client)
+	if err != nil {
+		http.Error(w, "Failed to save table to Redis", http.StatusInternalServerError)
+		return
+	}
+
+	// Produce a message to the Kafka topic indicating the player has left the table
+	message := fmt.Sprintf("Player %s left the table %s\n", playerName, table.ID)
+	message = table.StatusBoard(message) + table.StringBoard()
+	err = models.ProduceMessage(h.KAFKAADDRESS, tableID, message, h.KAFKAUSERNAME, h.KAFKAPASSWORD)
+	if err != nil {
+		http.Error(w, "Failed to produce message to Kafka topic", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
 }

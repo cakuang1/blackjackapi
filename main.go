@@ -16,10 +16,10 @@ func main() {
 		return
 	}
 	ConnectString := os.Getenv("REDIS")
+
 	opt, _ := redis.ParseURL(ConnectString)
 	client := redis.NewClient(opt)
-	// SET UP HANDLER DEPENDENCIES
-	handler := handlers.NewHandler(client)
+	handler := handlers.NewHandler(client, os.Getenv("UPSTASH_KAFKA_REST_USERNAME"), os.Getenv("UPSTASH_KAFKA_REST_PASSWORD"), os.Getenv("UPSTASH_KAFKA_REST_URL"))
 	Router := server.NewRouter(handler)
 	http.ListenAndServe(":8080", Router)
 

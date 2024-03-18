@@ -1,7 +1,8 @@
 package models
 
 import (
-	"bytes"
+	"net/url"
+
 	"context"
 	"crypto/tls"
 	"fmt"
@@ -33,15 +34,20 @@ func KafkaConsumer(groupId string) {
 	}
 }
 
-func produceMessage(key, message string) error {
-	url := fmt.Sprintf("https://logical-bass-10373-us1-rest-kafka.upstash.io/produce/%s/%s", "broadcast", key)
-	// Create a new HTTP POST request with the message as the payload
-	req, err := http.NewRequest("POST", url, bytes.NewBufferString(message))
+func ProduceMessage(address, key, message, user, pass string) error {
+	// Encode the message for inclusion in the URL
+	messageEncoded := url.QueryEscape(message)
+
+	// Construct the URL with properly encoded components
+	url := fmt.Sprintf("%s/produce/broadcast/%s", address, messageEncoded)
+
+	// Create a new HTTP GET request (since you're using "GET" method)
+	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return fmt.Errorf("error creating HTTP request: %v", err)
 	}
-	// Set the request headers
-	req.SetBasicAuth(os.Getenv("KAFKAUSERNAME"), os.Getenv("KAFKAPASSWORD"))
+	req.SetBasicAuth(user, pass)
+
 	// Send the HTTP request
 	client := &http.Client{}
 	resp, err := client.Do(req)
@@ -52,9 +58,8 @@ func produceMessage(key, message string) error {
 
 	// Check the response status code
 	if resp.StatusCode != http.StatusOK {
+		fmt.Println(resp.StatusCode)
 		return fmt.Errorf("non-OK status code received: %s", resp.Status)
 	}
-
-	fmt.Println("Message successfully produced to Kafka topic with key.")
 	return nil
 }
