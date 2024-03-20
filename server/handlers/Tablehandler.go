@@ -26,7 +26,7 @@ func (h *Handler) CreateTableHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Respond to the client with the table ID
-	response := fmt.Sprintf("Connect 4 table created with ID: %s. Connect to the table by calling /%s/connect", tableID, tableID)
+	response := tableID
 	w.WriteHeader(http.StatusCreated)
 	w.Write([]byte(response))
 }
@@ -35,7 +35,7 @@ func (h *Handler) CreateTableHandler(w http.ResponseWriter, r *http.Request) {
 // DeleteTableHandler deletes a Connect 4 table.
 func (h *Handler) DeleteTableHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	tableID := vars["table_id"]
+	tableID := vars["tableID"]
 
 	// Delete the table from Redis
 	err := models.DeleteSession(h.Context, tableID, h.Client)
@@ -94,7 +94,7 @@ func (h *Handler) JoinTableHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Produce message to Kafka topic
-	message := fmt.Sprintf("Player %s joined table %s \n", player.Name, table.ID)
+	message := fmt.Sprintf("Player %s joined table", player.Name)
 	message = table.StatusBoard(message) + table.StringBoard()
 
 	err = models.ProduceMessage(h.KAFKAADDRESS, table.ID, message, h.KAFKAUSERNAME, h.KAFKAPASSWORD)
@@ -108,8 +108,7 @@ func (h *Handler) JoinTableHandler(w http.ResponseWriter, r *http.Request) {
 // StartGameHandler handles requests to start a Connect 4 game
 func (h *Handler) StartGameHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	tableID := vars["table_id"]
-
+	tableID := vars["tableID"]
 	// Retrieve table from Redis
 	table, err := models.GetSession(h.Context, tableID, h.Client)
 	if err != nil {
@@ -123,14 +122,18 @@ func (h *Handler) StartGameHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	// Start the game (for example, set the status to true)
 	table.Status = true
-	// Save the updated table to Redis
+	table.Starts++
+	table.Turn = table.Starts % 2
+	table.ClearBoard()
+	// Start
 	err = models.SaveSession(h.Context, table, h.Client)
 	if err != nil {
 		http.Error(w, "Failed to save table to Redis", http.StatusInternalServerError)
 		return
 	}
 	// Produce message to Kafka topic
-	message := fmt.Sprintf("Game started for table %s \n", table.ID)
+	message := "Game has been started"
+
 	message = table.StatusBoard(message) + table.StringBoard()
 	err = models.ProduceMessage(h.KAFKAADDRESS, tableID, message, h.KAFKAUSERNAME, h.KAFKAPASSWORD)
 	if err != nil {
@@ -144,8 +147,8 @@ func (h *Handler) StartGameHandler(w http.ResponseWriter, r *http.Request) {
 // DropPieceHandler handles requests to drop a piece in the Connect 4 game
 func (h *Handler) DropPieceHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	tableID := vars["table_id"]
-	playerName := vars["player_name"]
+	tableID := vars["tableID"]
+	playerName := vars["name"]
 	columnStr := vars["column"]
 	column, err := strconv.Atoi(columnStr)
 	if err != nil {
@@ -158,7 +161,6 @@ func (h *Handler) DropPieceHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to retrieve table from Redis", http.StatusInternalServerError)
 		return
 	}
-
 	// Find the player
 	var currentPlayer *models.Player
 	for _, player := range table.Players {
@@ -171,16 +173,13 @@ func (h *Handler) DropPieceHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Player not found in the table", http.StatusBadRequest)
 		return
 	}
-	// Check if it's the player's turn (example logic, you may need to implement actual turn tracking )
-	if table.Turn%2 == 0 && currentPlayer.Name != table.Players[0].Name {
-		http.Error(w, fmt.Sprintf("Not %s's turn, please wait until your opponent plays their move", currentPlayer.Name), http.StatusBadRequest)
-		return
-	}
-	if table.Turn%2 == 1 && currentPlayer.Name != table.Players[1].Name {
-		http.Error(w, fmt.Sprintf("Not %s's turn, please wait until your opponent plays their move", currentPlayer.Name), http.StatusBadRequest)
-		return
-	}
 
+	turnname := table.GetPlayersTurn()
+
+	if turnname != playerName {
+		http.Error(w, fmt.Sprintf("It is %s's turn. Please wait until %s plays their move.", turnname, turnname), http.StatusBadRequest)
+		return
+	}
 	// Get symbol for the current player based on their position in the Players array
 	playerIndex := 0
 	for i, player := range table.Players {
@@ -204,20 +203,23 @@ func (h *Handler) DropPieceHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	// check if the current status is full or if someone has won
 
-	// Increment turn count (example logic)
-	table.Turn++
+	if table.Turn == 1 {
+		table.Turn = 0
+	} else {
+		table.Turn = 1
+	}
 	// Produce message to Kafka topic
+
 	message := fmt.Sprintf("Player %s dropped piece in column %d", currentPlayer.Name, column)
 	if table.CheckWin(playerSymbol) {
 		table.Players[playerIndex].AddWin()
-		message += fmt.Sprintf("Player %s has won. Game is now over. ", table.Players[playerIndex].Name)
 		table.Status = false
 	} else if table.IsBoardFull() {
-		message += "Board is full. Game is now Over"
+		table.Status = false
 	}
-	message += "\n"
+
+	models.SaveSession(h.Context, table, h.Client)
 	message = table.StatusBoard(message) + table.StringBoard()
 	err = models.ProduceMessage(h.KAFKAADDRESS, tableID, message, h.KAFKAUSERNAME, h.KAFKAPASSWORD)
 	if err != nil {
@@ -239,6 +241,10 @@ func (h *Handler) LeaveTableHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to retrieve table from Redis", http.StatusInternalServerError)
 		return
 	}
+	if table.Status {
+		http.Error(w, "Game is currently in progress. Please wait until the game is over", http.StatusBadRequest)
+		return
+	}
 	// Find the player in the table
 	playerIndex := -1
 	for i, player := range table.Players {
@@ -247,24 +253,20 @@ func (h *Handler) LeaveTableHandler(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 	}
-
 	if playerIndex == -1 {
 		http.Error(w, "Player not found in the table", http.StatusBadRequest)
 		return
 	}
-
 	// Remove the player from the table
 	table.Players = append(table.Players[:playerIndex], table.Players[playerIndex+1:]...)
-
 	// Save the updated table to Redis
 	err = models.SaveSession(h.Context, table, h.Client)
 	if err != nil {
 		http.Error(w, "Failed to save table to Redis", http.StatusInternalServerError)
 		return
 	}
-
 	// Produce a message to the Kafka topic indicating the player has left the table
-	message := fmt.Sprintf("Player %s left the table %s\n", playerName, table.ID)
+	message := fmt.Sprintf("Player %s left the table ", playerName)
 	message = table.StatusBoard(message) + table.StringBoard()
 	err = models.ProduceMessage(h.KAFKAADDRESS, tableID, message, h.KAFKAUSERNAME, h.KAFKAPASSWORD)
 	if err != nil {

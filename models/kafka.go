@@ -3,43 +3,20 @@ package models
 import (
 	"net/url"
 
-	"context"
-	"crypto/tls"
 	"fmt"
-	"github.com/segmentio/kafka-go"
-	"github.com/segmentio/kafka-go/sasl/scram"
+
 	"net/http"
-	"os"
-	"time"
 )
 
 // documentation from upstash kafka.
 
-func KafkaConsumer(groupId string) {
-	mechanism, _ := scram.Mechanism(scram.SHA512, os.Getenv("KAFKAPASSWORD"), os.Getenv("KAFKASALT"))
-	r := kafka.NewReader(kafka.ReaderConfig{
-		Brokers: []string{"logical-bass-10373-us1-kafka.upstash.io:9092"},
-		GroupID: groupId,
-		Topic:   "broadcast",
-		Dialer: &kafka.Dialer{
-			SASLMechanism: mechanism,
-			TLS:           &tls.Config{},
-		},
-	})
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*120) // Increase the timeout
-	defer cancel()
-	for {
-		message, _ := r.ReadMessage(ctx)
-		fmt.Println(message.Partition, message.Offset, string(message.Value))
-	}
-}
-
 func ProduceMessage(address, key, message, user, pass string) error {
 	// Encode the message for inclusion in the URL
 	messageEncoded := url.QueryEscape(message)
+	keyEncoded := url.QueryEscape(key)
 
 	// Construct the URL with properly encoded components
-	url := fmt.Sprintf("%s/produce/broadcast/%s", address, messageEncoded)
+	url := fmt.Sprintf("https://%s/produce/broadcast/%s?key=%s", address, messageEncoded, keyEncoded)
 
 	// Create a new HTTP GET request (since you're using "GET" method)
 	req, err := http.NewRequest("GET", url, nil)

@@ -14,8 +14,9 @@ type Session struct {
 	Turn          int        `json:"turn"`
 	Status        bool       `json:"status"`
 	Players       []*Player  `json:"players"`
-	Grid          [][]string `json:"grid"`           // Representing the Connect Four grid
-	OccupiedSlots int        `json:"occupied_slots"` // Counter for the number of occupied slots
+	Grid          [][]string `json:"grid"` // Representing the Connect Four grid
+	Starts        int
+	OccupiedSlots int `json:"occupied_slots"` // Counter for the number of occupied slots
 }
 
 const (
@@ -27,31 +28,64 @@ const (
 func (s *Session) StatusBoard(announcement string) string {
 	var sb strings.Builder
 
-	// Surrounding hashes
-	sb.WriteString("#############################\n")
+	// Calculate the length of the longest string in each section
+	var maxLengthID, maxLengthStatus, maxLengthPlayers int
+	for _, player := range s.Players {
+		if len(player.Name) > maxLengthPlayers {
+			maxLengthPlayers = len(player.Name)
+		}
+	}
+	maxLengthID = len(s.ID)
+	maxLengthStatus = len("Game is in Progress")
+	if !s.Status {
+		maxLengthStatus = len("Game has not started")
+	}
+	// Define the fixed width of the box
+	boxWidth := 60 // Adjust this value as needed
+	// Top line of the box
+	sb.WriteString("┌")
+	sb.WriteString(strings.Repeat("─", boxWidth-2))
+	sb.WriteString("┐\n")
+
 	// Session ID
-	sb.WriteString(fmt.Sprintf("# Session ID: %s\n", s.ID))
+	sessionid := fmt.Sprintf("│ Session ID: %-"+fmt.Sprintf("%d", maxLengthID)+"s ", s.ID)
+	sb.WriteString(sessionid)
+	sb.WriteString(strings.Repeat(" ", boxWidth-len(sessionid)+1))
+	sb.WriteString("│\n")
+
 	// Game status
 	status := "Game is in Progress"
 	if !s.Status {
 		status = "Game has not started"
 	}
-	sb.WriteString(fmt.Sprintf("# Status: %s\n", status))
 
-	// Number of players
-	sb.WriteString(fmt.Sprintf("# Number of Players: %d\n", len(s.Players)))
+	stat := fmt.Sprintf("│ Status: %-"+fmt.Sprintf("%d", maxLengthStatus)+"s ", status)
+	sb.WriteString(stat)
+	sb.WriteString(strings.Repeat(" ", boxWidth-len(stat)+1))
+	sb.WriteString("│\n")
 
-	// first convert to string list
-	var playerlist []string
+	// Player list
+	playerList := strings.Join(func() []string {
+		var names []string
+		for _, v := range s.Players {
+			names = append(names, v.Name)
+		}
+		return names
+	}(), ", ")
+	players := fmt.Sprintf("│ Player List: %-"+fmt.Sprintf("%d", maxLengthPlayers)+"s ", playerList)
+	sb.WriteString(players)
+	sb.WriteString(strings.Repeat(" ", boxWidth-len(players)+1))
+	sb.WriteString("│\n")
 
-	for _, v := range s.Players {
-		playerlist = append(playerlist, v.Name)
-	}
-	sb.WriteString(fmt.Sprintf("Player List: %s \n", playerlist))
 	// Current turn
 	if s.Status {
-		sb.WriteString(fmt.Sprintf("# Current Turn: %d\n", s.Turn))
+		currentplayer := s.Players[s.Turn].Name
+		turn := fmt.Sprintf("│ Current Turn: %s", currentplayer)
+		sb.WriteString(turn)
+		sb.WriteString(strings.Repeat(" ", boxWidth-len(turn)+1))
+		sb.WriteString("│\n")
 	}
+
 	// Players and their symbols
 	for i, player := range s.Players {
 		symbol := ""
@@ -60,11 +94,23 @@ func (s *Session) StatusBoard(announcement string) string {
 		} else if i == 1 {
 			symbol = Player2Symbol // Assign symbol "O" to the second player
 		}
-		sb.WriteString(fmt.Sprintf("# Player: %s - Symbol: %s - Wins: %d\n", player.Name, symbol, player.Wins))
+
+		playerInfo := fmt.Sprintf("| Player: %s - Symbol: %s - Wins: %d", player.Name, symbol, player.Wins)
+		sb.WriteString(playerInfo)
+		sb.WriteString(strings.Repeat(" ", boxWidth-len(playerInfo)-1))
+		sb.WriteString("│\n")
 	}
-	sb.WriteString(announcement + "\n")
-	// Ending hashes
-	sb.WriteString("#############################\n")
+
+	// Middle line of the box
+
+	// Announcement
+	sb.WriteString(fmt.Sprintf("│ %-"+fmt.Sprintf("%d", boxWidth-4)+"s │\n", announcement))
+
+	// Bottom line of the box
+	sb.WriteString("└")
+	sb.WriteString(strings.Repeat("─", boxWidth-2))
+	sb.WriteString("┘\n")
+
 	return sb.String()
 }
 
@@ -85,7 +131,17 @@ func NewSession(id string) *Session {
 		Status:        false,
 		Turn:          0,
 		Grid:          grid,
+		Starts:        0,
 		OccupiedSlots: 0,
+	}
+}
+
+func (s *Session) ClearBoard() {
+	s.OccupiedSlots = 0
+	for r := 0; r <= len(s.Grid)-1; r++ {
+		for c := 0; c <= len(s.Grid[0])-1; c++ {
+			s.Grid[r][c] = EmptySlot
+		}
 	}
 }
 
@@ -100,7 +156,6 @@ func (s *Session) DropPiece(column int, playerSymbol string) error {
 	if column < 0 || column >= len(s.Grid[0]) {
 		return errors.New("column index out of range")
 	}
-
 	for i := len(s.Grid) - 1; i >= 0; i-- {
 		if s.Grid[i][column] == EmptySlot {
 			s.Grid[i][column] = playerSymbol
@@ -187,6 +242,16 @@ func (s *Session) StringBoard() string {
 	sb.WriteString("\n")
 
 	return sb.String()
+}
+
+func (s *Session) GetPlayersTurn() string {
+	if len(s.Players) == 0 {
+		return "No players in the session"
+	}
+
+	currentPlayerIndex := s.Turn % len(s.Players)
+	currentPlayer := s.Players[currentPlayerIndex]
+	return currentPlayer.Name
 }
 
 // GRAB AND SAVE SESSIONS

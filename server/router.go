@@ -21,6 +21,8 @@ import (
 // NewRouter initializes and returns the HTTP router
 func NewRouter(handler *handlers.Handler) http.Handler {
 	router := mux.NewRouter()
+	// STATIC
+	router.Handle("/", http.FileServer(http.Dir("./static")))
 	//CREATE
 	router.HandleFunc("/create", handler.CreateTableHandler).Methods("GET")
 	//DELETE
@@ -28,12 +30,13 @@ func NewRouter(handler *handlers.Handler) http.Handler {
 	//START
 	router.HandleFunc("/{tableID}/start", handler.StartGameHandler)
 	// JOIN
-	router.HandleFunc("/{tableID}/join/{name}", handler.JoinTableHandler).Methods("GET")
+	router.HandleFunc("/{tableID}/{name}/join", handler.JoinTableHandler).Methods("GET")
 	// LEAVE
-	router.HandleFunc("/{tableID}/leave/{name}", handler.LeaveTableHandler).Methods("GET")
+	router.HandleFunc("/{tableID}/{name}/leave", handler.LeaveTableHandler).Methods("GET")
 	// DROP
-	router.HandleFunc("/{tableID}/hit/{name}", handler.DropPieceHandler).Methods("GET")
+	router.HandleFunc("/{tableID}/{name}/{column}/drop", handler.DropPieceHandler).Methods("GET")
 	// CONNECT
 	router.HandleFunc("/{tableID}/connect", handler.KafkaSSEHandler).Methods("GET")
+
 	return router
 }

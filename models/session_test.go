@@ -8,7 +8,6 @@ import (
 func TestNewSession(t *testing.T) {
 	id := "testSession"
 	session := NewSession(id)
-
 	if session.ID != id {
 		t.Errorf("Expected session ID to be %s, got %s", id, session.ID)
 	}
@@ -33,9 +32,7 @@ func TestNewSession(t *testing.T) {
 func TestAddPlayer(t *testing.T) {
 	session := NewSession("testSession")
 	player := &Player{Name: "Player1"}
-
 	err := session.AddPlayer(player)
-
 	if err != nil {
 		t.Errorf("Error adding player: %v", err)
 	}
